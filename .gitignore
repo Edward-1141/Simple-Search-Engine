@@ -54,4 +54,5 @@ __pycache__
 *.txt
 !phase1-output/*.txt
 !stopwords/*.txt
+!requirements.txt
 
