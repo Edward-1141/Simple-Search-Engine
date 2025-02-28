@@ -1,4 +1,5 @@
 import { SearchResult } from '@/types/search';
+import ClickableKeyword from '@/components/ClickableKeyword';
 
 interface SearchResultsProps {
   results: SearchResult[];
@@ -39,9 +40,7 @@ export default function SearchResults({ results, searchTime }: SearchResultsProp
             
             <div className="mt-2 flex flex-wrap gap-2">
               {Object.entries(result.keywords).map(([keyword, freq]) => (
-                <span key={keyword} className="px-2 py-1 bg-gray-100 rounded-full text-sm">
-                  {keyword} ({freq})
-                </span>
+                <ClickableKeyword keyword={keyword} freq={freq} key={keyword} />
               ))}
             </div>
           </div>
