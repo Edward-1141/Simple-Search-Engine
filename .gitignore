@@ -45,6 +45,7 @@ project-env
 *.tmp
 __pycache__
 .vscode
+.idea
 *.zip
 
 # ignore .db and .txt files except those for submission and stopwords
