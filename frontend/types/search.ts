@@ -22,3 +22,5 @@ export interface SearchOptions {
     'date-end': string | null;
     'time-end': string | null;
 }
+
+export type SearchParams = Partial<{ query: string } & SearchOptions>;

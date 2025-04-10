@@ -1,14 +1,15 @@
 import Form from 'next/form';
 import AdvanceSearchOption from '@/components/AdvanceSearchOption';
+import { SearchParams } from '@/types/search';
 
-export default function SearchForm({ query }: { query?: string }) {
+export default function SearchForm( {searchParams}: { searchParams?: SearchParams }) {
 
   return (
-    <Form action="/" scroll={false}>
+    <Form action="/search" scroll={false}>
       <div className="search-form">
         <input
           name="query"
-          defaultValue={query}
+          defaultValue={searchParams?.query || "" }
           className="search-input"
           placeholder="Search for anything..."
         />
@@ -20,7 +21,7 @@ export default function SearchForm({ query }: { query?: string }) {
         </div>
       </div>
 
-      < AdvanceSearchOption />
+      < AdvanceSearchOption searchParams={searchParams || {}} />
     </Form>
   )
 }

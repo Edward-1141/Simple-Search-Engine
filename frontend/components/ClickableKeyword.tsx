@@ -19,7 +19,7 @@ const ClickableKeyword = ({ keyword, freq }: { keyword: string; freq: number }) 
         } else {
             const params = new URLSearchParams(searchParams.toString());
             params.set("query", keyword);
-            router.push(`/?${params.toString()}`);
+            router.push(`/search?${params.toString()}`);
         }
     };
 
