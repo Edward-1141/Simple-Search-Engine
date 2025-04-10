@@ -1,41 +1,15 @@
-import os
 from functools import lru_cache
 from typing import Literal, Sequence
 
 import sqlite3
-import hashlib
 import numpy as np
 from tqdm import tqdm
 from datetime import datetime
 
-from Page import Page
-from Index import InvertedIndex, ForwardIndex, IDMap, PageForwardIndex
-# TODO: check if indexList is needed
+from .Page import Page
+from .Index import InvertedIndex, ForwardIndex, IDMap, PageForwardIndex, generate_hash_id
 
 CACHE_SIZE = 1024
-
-
-def generate_hash_id(string: str, key_dict: IDMap) -> int:
-    if key_dict is None:
-        raise ValueError("key_dict cannot be None")
-
-    if string in key_dict.values():
-        return key_dict.get_id(string)
-
-    # generate 8-byte int hash from string
-    sha256_hash = hashlib.sha256(string.encode()).digest()
-    hash = int.from_bytes(sha256_hash[:7], 'big')
-
-    # check for hash collision -> double hashing
-    while hash in key_dict.keys():
-        sha256_hash = hashlib.sha256(sha256_hash).digest()
-        hash = int.from_bytes(sha256_hash[:7], 'big')
-
-    # add the hash to the key_dict
-    key_dict.add_item(string, hash)
-
-    return hash
-
 
 class Database:
     def __init__(self, db_path, forward_index_head_size=10):
@@ -118,7 +92,7 @@ class Database:
         self.cursor.execute("SELECT body FROM urlBody WHERE uid = ?", (uid,))
         result = self.cursor.fetchone()
         return result[0] if result else None
-        
+
     @lru_cache(maxsize=CACHE_SIZE)
     def get_wid(self, word: str):
         return self.get_wid_uncached(word)

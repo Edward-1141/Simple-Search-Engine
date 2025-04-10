@@ -1,11 +1,6 @@
-from collections import defaultdict
+import hashlib
 import math
-
-
-def get_term_weight(tf_norm: float, idf: float):
-    # weight = (0.5 + 0.5 * tf_norm) * math.log(1 + total_pages / df)
-    return tf_norm * idf
-
+from collections import defaultdict
 
 class IDMap:
     """
@@ -225,3 +220,28 @@ class InvertedIndex:
         else:
             raise ValueError(
                 f'page_id {page_id_dict.get_value(page_id)} not found in InvertedIndexQuery {word_id}')
+
+def generate_hash_id(string: str, key_dict: IDMap) -> int:
+    if key_dict is None:
+        raise ValueError("key_dict cannot be None")
+
+    if string in key_dict.values():
+        return key_dict.get_id(string)
+
+    # generate 8-byte int hash from string
+    sha256_hash = hashlib.sha256(string.encode()).digest()
+    hash = int.from_bytes(sha256_hash[:7], 'big')
+
+    # check for hash collision -> double hashing
+    while hash in key_dict.keys():
+        sha256_hash = hashlib.sha256(sha256_hash).digest()
+        hash = int.from_bytes(sha256_hash[:7], 'big')
+
+    # add the hash to the key_dict
+    key_dict.add_item(string, hash)
+
+    return hash
+
+def get_term_weight(tf_norm: float, idf: float):
+    # weight = (0.5 + 0.5 * tf_norm) * math.log(1 + total_pages / df)
+    return tf_norm * idf

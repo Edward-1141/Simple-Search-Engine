@@ -1,7 +1,7 @@
 from math import sqrt
-from Database import Database, generate_hash_id
-from Index import InvertedIndex, ForwardIndex, PageForwardIndex, IDMap
-from Page import Page
+from database.Database import Database
+from database.Index import InvertedIndex, ForwardIndex, PageForwardIndex, IDMap, generate_hash_id
+from database.Page import Page
 
 from collections import Counter, defaultdict
 from nltk.stem import PorterStemmer

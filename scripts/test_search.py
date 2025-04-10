@@ -1,4 +1,4 @@
-from Score import SearchEngine
+from flask_app.Score import SearchEngine
 
 if __name__ == '__main__':
     db_path = 'db/spider_test.db'

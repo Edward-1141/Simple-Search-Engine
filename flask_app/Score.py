@@ -1,16 +1,13 @@
 import string
-import re
-from math import sqrt
-from typing import List, Literal, Sequence
+from typing import List, Literal
 from functools import lru_cache
 from collections import defaultdict
 
 from nltk.stem import PorterStemmer
 import numpy as np
 
-from Database import Database
-from Indexer import Indexer
-from Index import get_term_weight
+from database.Database import Database
+from database.Index import get_term_weight
 
 # parse string to a list of words
 
@@ -84,7 +81,7 @@ class SearchEngine:
                 return True
         return False
 
-    def _filtering(self, phrase: list[str], raw: bool, table: Literal["title", "body"], phrase_search_distance: int = 1, stem_for_raw:bool = True):
+    def _filtering(self, phrase: list[str], raw: bool, table: Literal["title", "body"], phrase_search_distance: int = 1, stem_for_raw: bool = True):
         # print(f"phrase: {phrase}")
         uid_posistion_list = defaultdict(
             list[set])  # url_id: [pos1, pos2, ...]
@@ -94,18 +91,24 @@ class SearchEngine:
                 return set()  # no url contain the phrase
             if table == "body":
                 if raw and stem_for_raw:
-                    _, body_query = self.database.get_inverted_index_position(wid, "rawInvertedIndex")
+                    _, body_query = self.database.get_inverted_index_position(
+                        wid, "rawInvertedIndex")
                 elif raw and not stem_for_raw:
-                    _, body_query = self.database.get_inverted_index_position(wid, "stemmedRawInvertedIndex")
+                    _, body_query = self.database.get_inverted_index_position(
+                        wid, "stemmedRawInvertedIndex")
                 else:
-                    _, body_query = self.database.get_inverted_index_position(wid, "invertedIndex")
+                    _, body_query = self.database.get_inverted_index_position(
+                        wid, "invertedIndex")
             else:  # table == "title"
                 if raw and stem_for_raw:
-                    _, body_query = self.database.get_inverted_index_position(wid, "rawTitleInvertedIndex")
+                    _, body_query = self.database.get_inverted_index_position(
+                        wid, "rawTitleInvertedIndex")
                 elif raw and not stem_for_raw:
-                    _, body_query = self.database.get_inverted_index_position(wid, "stemmedRawTitleInvertedIndex")
+                    _, body_query = self.database.get_inverted_index_position(
+                        wid, "stemmedRawTitleInvertedIndex")
                 else:
-                    _, body_query = self.database.get_inverted_index_position(wid, "titleInvertedIndex")
+                    _, body_query = self.database.get_inverted_index_position(
+                        wid, "titleInvertedIndex")
             if body_query is None:
                 return set()
 
@@ -123,7 +126,7 @@ class SearchEngine:
 
         return set(uid_posistion_list.keys())
 
-    def filtering(self, phrase: list[str], match_in_title: bool, raw: bool, stem_for_raw:bool = True, phrase_search_distance: int = 1):
+    def filtering(self, phrase: list[str], match_in_title: bool, raw: bool, stem_for_raw: bool = True, phrase_search_distance: int = 1):
         """
         return set of url_id that contain the phrase
         """
@@ -178,10 +181,10 @@ class SearchEngine:
 
         if phrase is not None and len(phrase) > 0:
             filtered_url = self.filtering(
-                phrase=phrase, 
-                match_in_title=match_in_title, 
-                raw=raw_match_phrase, 
-                stem_for_raw=stem_for_raw, 
+                phrase=phrase,
+                match_in_title=match_in_title,
+                raw=raw_match_phrase,
+                stem_for_raw=stem_for_raw,
                 phrase_search_distance=phrase_search_distance)
         else:
             filtered_url = None
@@ -214,12 +217,15 @@ class SearchEngine:
         # add page rank score
         if with_page_rank:
             for url_id in results.keys():
-                results[url_id].result["score"] += self.page_rank_weight * self.database.get_urlList(url_id, "page_rank_score")
-        return_results = sorted([result.result for result in results.values()], key=lambda x: x["score"], reverse=True)
+                results[url_id].result["score"] += self.page_rank_weight * \
+                    self.database.get_urlList(url_id, "page_rank_score")
+        return_results = sorted([result.result for result in results.values(
+        )], key=lambda x: x["score"], reverse=True)
 
         # slice summary *for top 5 results only*
         for result in return_results[:5]:
-            full_body = self.database.get_urlbody(self.database.get_uid(result["url"]))
+            full_body = self.database.get_urlbody(
+                self.database.get_uid(result["url"]))
             min_index = float('inf')
             for query_word in result['word_pos'].keys():
                 # re_match = re.search(r'((?:\S+\s+){0,2})'+f'\\b({query_word.lower()})\\b', full_body.lower())
@@ -259,12 +265,12 @@ class SearchEngine:
             # print(f"Searching for query: {query}\nphrase: {phrase}")
             # print(f"raw_match_phrase: {raw_match_phrase}, match_in_title: {match_in_title}, phrase_search_distance: {phrase_search_distance}")
             result = self._search(
-                query=query, 
+                query=query,
                 phrase=phrase,
                 raw_match_phrase=raw_match_phrase,
                 stem_for_raw=stem_for_raw,
-                match_in_title=match_in_title, 
-                phrase_search_distance=phrase_search_distance, 
+                match_in_title=match_in_title,
+                phrase_search_distance=phrase_search_distance,
                 with_page_rank=with_page_rank)
         else:
             query = self.remove_stopwords(self.stem(parse(query)))

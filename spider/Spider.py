@@ -1,23 +1,24 @@
-from Page import Page
-from Database import Database, generate_hash_id
-from Indexer import Indexer
-from Index import InvertedIndex, ForwardIndex, PageForwardIndex, IDMap
+import requests
 from collections import deque
 from datetime import datetime
-from typing import Dict, Set
+from typing import Set
 
-import hashlib
-import requests
+from .Indexer import Indexer
+from database.Page import Page
+from database.Database import Database
+from database.Index import generate_hash_id
+
 
 # TODO: 1. still crawling the same page if last-modified is newer base on db
 #       2. update db after having the new forward_index, inverted_index, title_inverted_index
+
 
 class Spider:
     def __init__(self, database: Database, indexer: Indexer):
         # Initializations
         if database is None or indexer is None:
             raise ValueError("Database and Indexer must be provided")
-        
+
         self.database = database
         self.indexer = indexer
 
@@ -26,7 +27,8 @@ class Spider:
         self.word_id_dict = self.database.get_word_id_dict()
         self.forward_indices, self.inverted_index, self.title_inverted_index, \
             self.raw_inverted_index, self.raw_title_inverted_index, \
-                 self.stemmed_raw_inverted_index, self.stemmed_raw_title_inverted_index = self.database.get_all_index(self.page_id_dict, self.word_id_dict)    # Read from database 
+            self.stemmed_raw_inverted_index, self.stemmed_raw_title_inverted_index = self.database.get_all_index(
+                self.page_id_dict, self.word_id_dict)    # Read from database
 
         self.max_pagecount = 0
         self.curr_pagecount = 0
@@ -47,7 +49,7 @@ class Spider:
         # if the page is not in the database, return False -> update the page
         if modified_time_recorded is None:
             return False
-        
+
         # compare the last modified time of the page with the last modified time in the database
         return modified_time_recorded >= last_modified_datetime
 
@@ -78,13 +80,13 @@ class Spider:
             response_last_modified = response.headers.get('Last-Modified')
             if response_last_modified is not None:
                 # parse Last-Modified into datetime object
-                last_modified_datetime = datetime.strptime(response_last_modified,\
-                                                      "%a, %d %b %Y %H:%M:%S %Z")
+                last_modified_datetime = datetime.strptime(response_last_modified,
+                                                           "%a, %d %b %Y %H:%M:%S %Z")
             else:
                 # set last_modifed_datetime to Date field if Last-Modified is not provided
-                last_modified_datetime = datetime.strptime(response.headers.get('Date'),\
-                                                      "%a, %d %b %Y %H:%M:%S %Z")
-            
+                last_modified_datetime = datetime.strptime(response.headers.get('Date'),
+                                                           "%a, %d %b %Y %H:%M:%S %Z")
+
             content_length = response.headers.get("Content-Length")
             if content_length is not None:
                 content_length = int(content_length)
@@ -92,8 +94,9 @@ class Spider:
                 content_length = len(response.content)
 
             page_id = generate_hash_id(url, self.page_id_dict)
-            page = Page(url, page_id, last_modified_datetime, content_length, response.content)
-                    
+            page = Page(url, page_id, last_modified_datetime,
+                        content_length, response.content)
+
             if self.page_visited(url) and self.page_no_update(url, last_modified_datetime):
                 print(f'[-] visited with no update! {url}')
             else:
@@ -104,19 +107,19 @@ class Spider:
             # BFS crawl
             links = page.child_links.keys()
             for link in links:
-                if link not in pages_collection.keys() and link not in _visited_pages: # handle circular links
+                if link not in pages_collection.keys() and link not in _visited_pages:  # handle circular links
                     crawl_queue.append((link, depth+1))
                     _visited_pages.add(link)
 
-        # Index all pages in the collection,             
-        self.indexer.index_pages_collection(pages_collection, self.word_id_dict, self.page_id_dict, 
-                                            self.forward_indices, self.inverted_index, self.title_inverted_index, 
+        # Index all pages in the collection,
+        self.indexer.index_pages_collection(pages_collection, self.word_id_dict, self.page_id_dict,
+                                            self.forward_indices, self.inverted_index, self.title_inverted_index,
                                             self.raw_inverted_index, self.raw_title_inverted_index,
                                             self.stemmed_raw_inverted_index, self.stemmed_raw_title_inverted_index)
 
         # Update the database # NOTE: other things are updated in the indexer
         for page in pages_collection.values():
-            self.database.add_data_pc(page, self.page_id_dict) 
-        
-        self.database.calculate_page_rank_score(self.forward_indices, 0.85, max_iterations=500, convergence_threshold=1e-6)
+            self.database.add_data_pc(page, self.page_id_dict)
 
+        self.database.calculate_page_rank_score(
+            self.forward_indices, 0.85, max_iterations=500, convergence_threshold=1e-6)
