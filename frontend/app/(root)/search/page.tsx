@@ -1,6 +1,7 @@
 import SearchForm from '@/components/SearchForm';
 import SearchResults from '@/components/SearchResults';
 import { SearchParams } from '@/types/search';
+import { envConfig } from '@/config/envConfig';
 
 export default async function Page(props: {
   searchParams: Promise<SearchParams>;
@@ -12,7 +13,7 @@ export default async function Page(props: {
     searchParams as Record<string, string>
   )
   // console.log(params.toString())
-  const response = await fetch(`http://127.0.0.1:8080/api/search?${params}`)
+  const response = await fetch(`${envConfig.BACKEND_URL}/api/search?${params}`)
   const data = await response.json()
   // console.log(data)
 
