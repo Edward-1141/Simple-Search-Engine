@@ -6,12 +6,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
-public interface TitleInvertedIndexRepository extends JpaRepository<TitleInvertedIndex, Integer> {
+public interface TitleInvertedIndexRepository extends JpaRepository<TitleInvertedIndex, Long> {
     
-    @Query("SELECT tii.count, tii.data FROM TitleInvertedIndex tii WHERE tii.wid = :wid")
-    Object[] getInvertedIndexFullInfo(@Param("wid") Integer wid);
+    @Query(value = "SELECT tii.data FROM TitleInvertedIndex tii WHERE tii.wid = :wid", nativeQuery = true)
+    List<String> getInvertedIndexFullInfo(@Param("wid") Long wid);
     
-    @Query("SELECT tii.count, tii.data FROM TitleInvertedIndex tii WHERE tii.wid = :wid")
-    Object[] getInvertedIndexPosition(@Param("wid") Integer wid);
+    @Query(value = "SELECT tii.data FROM TitleInvertedIndex tii WHERE tii.wid = :wid", nativeQuery = true)
+    List<String> getInvertedIndexPosition(@Param("wid") Long wid);
 } 

@@ -6,9 +6,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
-public interface ForwardIndexRepository extends JpaRepository<ForwardIndex, Integer> {
+public interface ForwardIndexRepository extends JpaRepository<ForwardIndex, Long> {
     
-    @Query("SELECT fi.count, fi.dataHead FROM ForwardIndex fi WHERE fi.uid = :uid")
-    Object[] getForwardIndexHead(@Param("uid") Integer uid);
+    @Query(value = "SELECT fi.data_head FROM ForwardIndex fi WHERE fi.uid = :uid LIMIT 1", nativeQuery = true)
+    List<String> getForwardIndexHead(@Param("uid") Long uid);
 } 

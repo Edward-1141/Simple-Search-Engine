@@ -10,7 +10,7 @@ import lombok.Data;
 @Data
 public class RawInvertedIndex {
     @Id
-    private Integer wid;
+    private Long wid;
     private Integer count;
     private String data;
 } 

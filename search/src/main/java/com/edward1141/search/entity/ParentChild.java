@@ -12,8 +12,8 @@ import lombok.Data;
 @IdClass(ParentChildId.class)
 public class ParentChild {
     @Id
-    private Integer parentid;
+    private Long parentid;
     
     @Id
-    private Integer childid;
+    private Long childid;
 } 

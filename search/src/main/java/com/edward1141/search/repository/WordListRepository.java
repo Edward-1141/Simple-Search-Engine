@@ -10,14 +10,11 @@ import java.util.List;
 import java.util.Map;
 
 @Repository
-public interface WordListRepository extends JpaRepository<WordList, Integer> {
+public interface WordListRepository extends JpaRepository<WordList, Long> {
     
-    @Query("SELECT w.wid FROM WordList w WHERE w.word = :word")
-    Integer findWidByWord(@Param("word") String word);
+    @Query(value = "SELECT w.wid FROM WordList w WHERE w.word = :word LIMIT 1", nativeQuery = true)
+    Long findWidByWord(@Param("word") String word);
     
-    @Query("SELECT w.word FROM WordList w WHERE w.wid = :wid")
-    String findWordByWid(@Param("wid") Integer wid);
-    
-    @Query("SELECT w.wid as wid, w.word as word FROM WordList w")
+    @Query(value = "SELECT w.wid as wid, w.word as word FROM WordList w", nativeQuery = true)
     List<Map<String, Object>> getWordIdDict();
 } 

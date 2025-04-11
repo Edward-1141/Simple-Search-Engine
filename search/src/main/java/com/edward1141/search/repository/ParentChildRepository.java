@@ -12,9 +12,9 @@ import java.util.List;
 @Repository
 public interface ParentChildRepository extends JpaRepository<ParentChild, ParentChildId> {
     
-    @Query("SELECT pc.childid FROM ParentChild pc WHERE pc.parentid = :uid")
-    List<Integer> findChildIdsByParentId(@Param("uid") Integer uid);
+    @Query(value = "SELECT pc.childid FROM ParentChild pc WHERE pc.parentid = :uid", nativeQuery = true)
+    List<Long> findChildIdsByParentId(@Param("uid") Long uid);
     
-    @Query("SELECT pc.parentid FROM ParentChild pc WHERE pc.childid = :uid")
-    List<Integer> findParentIdsByChildId(@Param("uid") Integer uid);
+    @Query(value = "SELECT pc.parentid FROM ParentChild pc WHERE pc.childid = :uid", nativeQuery = true)
+    List<Long> findParentIdsByChildId(@Param("uid") Long uid);
 } 

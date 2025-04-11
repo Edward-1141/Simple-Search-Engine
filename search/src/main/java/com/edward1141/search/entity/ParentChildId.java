@@ -10,6 +10,6 @@ import java.io.Serializable;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ParentChildId implements Serializable {
-    private Integer parentid;
-    private Integer childid;
+    private Long parentid;
+    private Long childid;
 } 

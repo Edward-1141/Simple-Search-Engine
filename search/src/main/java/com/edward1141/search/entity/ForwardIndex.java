@@ -5,13 +5,15 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Data;
 
+//TODO: fix naming in database
+
 @Entity
 @Table(name = "forwardIndex")
 @Data
 public class ForwardIndex {
     @Id
-    private Integer uid;
+    private Long uid;
     private Integer count;
-    private String dataHead;
+    private String data_head;
     private String data;
 } 

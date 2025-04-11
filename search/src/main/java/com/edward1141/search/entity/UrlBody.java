@@ -10,6 +10,6 @@ import lombok.Data;
 @Data
 public class UrlBody {
     @Id
-    private Integer uid;
+    private Long uid;
     private String body;
 } 

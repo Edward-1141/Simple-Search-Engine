@@ -1,14 +1,30 @@
 package com.edward1141.search.service;
 
+import com.edward1141.search.entity.UrlList;
 import com.edward1141.search.model.SearchRequest;
 import com.edward1141.search.model.SearchResponse;
 import com.edward1141.search.model.SearchResult;
 import com.edward1141.search.repository.*;
+import com.edward1141.search.utils.IndexParser;
+import com.edward1141.search.utils.IndexParser.*;
+import com.edward1141.search.utils.QueryParser;
+import com.edward1141.search.utils.QueryParser.QueryParseResult;
+import com.edward1141.search.utils.SimilarityRetrieval;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import opennlp.tools.stemmer.PorterStemmer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.stream.Collectors;
+
+
+// TODO: use Enum for String
+// TODO: refactor refactor to don't remove count for inverted index
+// TODO: fixed the Object[] and create classes for them
+// TODO: Remove useless wordPos and titleWordPos
 
 @Service
 public class SearchService {
@@ -28,6 +44,9 @@ public class SearchService {
     private final double titleWeight;
     private final double bodyWeight;
     private final double pageRankWeight;
+    private final PorterStemmer stemmer;
+    private final IndexParser indexParser;
+    private static final Logger logger = LoggerFactory.getLogger(SearchService.class);
     
     @Autowired
     public SearchService(
@@ -57,37 +76,26 @@ public class SearchService {
         this.stopwords = stopwords;
         
         // FIXME: Magic Default values
-        this.titleWeight = 4.0;
+        this.titleWeight = 3.0;
         this.bodyWeight = 1.0;
         this.pageRankWeight = 0.2;
-    }
-    
-    private Set<String> loadStopwords() {
-        // In a real implementation, load from a file
-        // For now, return an empty set
-        return new HashSet<>();
-    }
-    
-    public SearchResponse search(SearchRequest request) {
-        long startTime = System.currentTimeMillis();
         
+        // Initialize the stemmer once
+        this.stemmer = new PorterStemmer();
+        this.indexParser = new IndexParser();
+    }
+
+    public SearchResponse search(SearchRequest request) throws JsonProcessingException {
+        logger.info("Search request: {}", request);
+        long startTime = System.currentTimeMillis();
+
+        QueryParseResult queryParseResult = new QueryParser().parse(request.getQuery());
         List<String> queryTerms;
         List<String> phraseTerms = null;
-        
-        if (request.getQuery().contains("\"")) {
-            // Handle phrase search
-            String[] parts = request.getQuery().split("\"");
-            if (parts.length >= 3) {
-                phraseTerms = parse(parts[1]);
-                if (!request.isRawMatchPhrase()) {
-                    phraseTerms = removeStopwords(stem(phraseTerms));
-                } else if (request.isStemForRaw()) {
-                    phraseTerms = stem(phraseTerms);
-                }
-
-            }
+        queryTerms = removeStopwords(stem(queryParseResult.getQueryTerms()));
+        if (!queryParseResult.getQuotedTerms().isEmpty()) {
+            phraseTerms = removeStopwords(stem(queryParseResult.getQuotedTerms()));
         }
-        queryTerms = removeStopwords(stem(parse(request.getQuery())));
 
         List<SearchResult> results = _search(
                 queryTerms,
@@ -109,28 +117,10 @@ public class SearchService {
                 .build();
     }
     
-    private List<String> parse(String s) {
-        // Remove punctuation and convert to lowercase
-        String cleanedText = s.replaceAll("[^\\w\\s]", "").toLowerCase();
-        
-        // Use StringTokenizer to split by whitespace
-        StringTokenizer tokenizer = new StringTokenizer(cleanedText, " \t\n\r\f");
-        List<String> tokens = new ArrayList<>();
-        
-        while (tokenizer.hasMoreTokens()) {
-            String token = tokenizer.nextToken();
-            if (!token.isEmpty()) {
-                tokens.add(token);
-            }
-        }
-        
-        return tokens;
-    }
-    
     private List<String> stem(List<String> words) {
-        // In a real implementation, use a stemmer like PorterStemmer
-        // For now, just return the words as is
-        return words;
+        return words.stream()
+                .map(stemmer::stem)
+                .collect(Collectors.toList());
     }
     
     private List<String> removeStopwords(List<String> words) {
@@ -149,23 +139,24 @@ public class SearchService {
         }
         return false;
     }
-    
-    private Set<Integer> filtering(List<String> phrase, boolean raw, String table, int phraseSearchDistance, boolean stemForRaw) {
-        Map<Integer, List<Set<Integer>>> uidPositionList = new HashMap<>();
+
+    //TODO: Repository type
+    private Set<Long> filterPhraseInTable(List<String> phrase, boolean raw, String table, int phraseSearchDistance, boolean stemForRaw) throws JsonProcessingException {
+        Map<Long, List<Set<Integer>>> uidPositionList = new HashMap<>();
         
         for (int idx = 0; idx < phrase.size(); idx++) {
             String word = phrase.get(idx);
-            Integer wid = wordListRepository.findWidByWord(word);
+            Long wid = wordListRepository.findWidByWord(word);
             
             if (wid == null) {
                 return new HashSet<>(); // No URL contains the phrase
             }
-            
-            Object[] result;
+
+            List<String> result;
             if (table.equals("body")) {
                 if (raw && stemForRaw) {
                     result = rawInvertedIndexRepository.getInvertedIndexPosition(wid);
-                } else if (raw && !stemForRaw) {
+                } else if (raw) {
                     result = stemmedRawInvertedIndexRepository.getInvertedIndexPosition(wid);
                 } else {
                     result = invertedIndexRepository.getInvertedIndexPosition(wid);
@@ -173,28 +164,25 @@ public class SearchService {
             } else { // table == "title"
                 if (raw && stemForRaw) {
                     result = rawTitleInvertedIndexRepository.getInvertedIndexPosition(wid);
-                } else if (raw && !stemForRaw) {
+                } else if (raw) {
                     result = stemmedRawTitleInvertedIndexRepository.getInvertedIndexPosition(wid);
                 } else {
                     result = titleInvertedIndexRepository.getInvertedIndexPosition(wid);
                 }
             }
             
-            if (result == null || result.length < 2) {
+            if (result.isEmpty()) {
                 return new HashSet<>();
             }
-            
-            Integer count = (Integer) result[0];
-            @SuppressWarnings("unchecked")
-            Map<Integer, Set<Integer>> bodyQuery = (Map<Integer, Set<Integer>>) result[1];
+            Map<Long, Set<Integer>> bodyQuery = indexParser.parsePostionsInfo(result.get(0));
             
             if (idx != 0) {
                 // Filter URLs that contain all words in the phrase
                 uidPositionList.keySet().removeIf(urlId -> !bodyQuery.containsKey(urlId));
             }
             
-            for (Map.Entry<Integer, Set<Integer>> entry : bodyQuery.entrySet()) {
-                Integer urlId = entry.getKey();
+            for (Map.Entry<Long, Set<Integer>> entry : bodyQuery.entrySet()) {
+                Long urlId = entry.getKey();
                 Set<Integer> wordPositions = entry.getValue();
                 
                 if (idx == 0 || (uidPositionList.containsKey(urlId) && 
@@ -206,83 +194,71 @@ public class SearchService {
             }
         }
         
-        return new HashSet<>(uidPositionList.keySet());
+        return new HashSet<Long>(uidPositionList.keySet());
     }
     
-    private Set<Integer> filtering(List<String> phrase, boolean matchInTitle, boolean raw, boolean stemForRaw, int phraseSearchDistance) {
+    private Set<Long> filterPhrase(List<String> phrase, boolean matchInTitle, boolean raw, boolean stemForRaw, int phraseSearchDistance) throws JsonProcessingException {
         if (!raw) {
             phrase = stem(phrase);
         }
         
         if (matchInTitle) {
-            return filtering(phrase, raw, "title", phraseSearchDistance, stemForRaw);
+            return filterPhraseInTable(phrase, raw, "title", phraseSearchDistance, stemForRaw);
         } else {
-            Set<Integer> titleResults = filtering(phrase, raw, "title", phraseSearchDistance, stemForRaw);
-            Set<Integer> bodyResults = filtering(phrase, raw, "body", phraseSearchDistance, stemForRaw);
+            Set<Long> titleResults = filterPhraseInTable(phrase, raw, "title", phraseSearchDistance, stemForRaw);
+            Set<Long> bodyResults = filterPhraseInTable(phrase, raw, "body", phraseSearchDistance, stemForRaw);
             
-            Set<Integer> combinedResults = new HashSet<>(titleResults);
+            Set<Long> combinedResults = new HashSet<>(titleResults);
             combinedResults.addAll(bodyResults);
             return combinedResults;
         }
     }
-    
-    private Map<Integer, Object[]> _cosineSimilarity(List<String> query, String invertedIndexTable, Set<Integer> filteredUrl) {
-        Map<Integer, Object[]> innerProducts = new HashMap<>();
+
+    //TODO: Repository type
+    private Map<Long, SimilarityRetrieval> _cosineSimilarity(List<String> query, String invertedIndexTable, Set<Long> filteredUrl) throws JsonProcessingException {
+        Map<Long, SimilarityRetrieval> similarityRetrievals = new HashMap<>(); // urlId -> (score, wordPositions)
         double[] queryVector = new double[query.size()];
-        
+
         for (int idx = 0; idx < query.size(); idx++) {
             String keyWord = query.get(idx);
-            Integer wid = wordListRepository.findWidByWord(keyWord);
-            
+            Long wid = wordListRepository.findWidByWord(keyWord);
             if (wid == null) {
                 continue;
             }
-            
-            Object[] result;
+
+            // Get the inverted index for the word
+            List<String> result;
             if (invertedIndexTable.equals("invertedIndex")) {
                 result = invertedIndexRepository.getInvertedIndexFullInfo(wid);
             } else { // titleInvertedIndex
                 result = titleInvertedIndexRepository.getInvertedIndexFullInfo(wid);
             }
-            
-            if (result == null || result.length < 2) {
+            if (result.isEmpty()) {
                 continue;
             }
-            
-            Integer count = (Integer) result[0];
-            @SuppressWarnings("unchecked")
-            Map<Integer, Object[]> bodyQuery = (Map<Integer, Object[]>) result[1];
-            
-            if (!bodyQuery.isEmpty()) {
-                Object[] firstEntry = bodyQuery.values().iterator().next();
-                queryVector[idx] = (Double) firstEntry[3]; // idf value
-            }
-            
-            for (Map.Entry<Integer, Object[]> entry : bodyQuery.entrySet()) {
-                Integer urlId = entry.getKey();
+
+            Map<Long, FullIndex> bodyQuery = indexParser.parseFullIndex(result.get(0));
+
+            // Set query vector value
+            queryVector[idx] = bodyQuery.isEmpty() ? 0 : bodyQuery.values().iterator().next().idf;
+
+            for (Map.Entry<Long, FullIndex> entry : bodyQuery.entrySet()) {
+                Long urlId = entry.getKey();
                 
                 // Filter out URLs not in the filtered set
                 if (filteredUrl != null && !filteredUrl.contains(urlId)) {
                     continue;
                 }
-                
-                Object[] values = entry.getValue();
-                Double tfNorm = (Double) values[2];
-                Double idf = (Double) values[3];
-                @SuppressWarnings("unchecked")
-                List<Integer> positions = (List<Integer>) values[4];
-                
+
+                FullIndex values = entry.getValue();
+
                 Double documentWeight = urlListRepository.getDocumentWeight(urlId);
-                if (documentWeight == null) {
-                    documentWeight = 1.0;
-                }
-                
-                Object[] innerProduct = innerProducts.computeIfAbsent(urlId, k -> new Object[]{0.0, new HashMap<String, Set<Integer>>()});
-                innerProduct[0] = (Double) innerProduct[0] + getTermWeight(tfNorm, idf) / documentWeight;
-                
-                @SuppressWarnings("unchecked")
-                Map<String, Set<Integer>> wordPositions = (Map<String, Set<Integer>>) innerProduct[1];
-                wordPositions.computeIfAbsent(keyWord, k -> new HashSet<>()).addAll(positions);
+
+                SimilarityRetrieval similarityRetrieval = similarityRetrievals.computeIfAbsent(urlId, k -> new SimilarityRetrieval());
+                similarityRetrieval.setSimilarityScore(
+                        similarityRetrieval.getSimilarityScore() + (getTermWeight(values.tfNorm, values.idf) / documentWeight)
+                );
+                similarityRetrieval.getWordPositions().computeIfAbsent(keyWord, k -> new HashSet<>()).addAll(values.positions);
             }
         }
         
@@ -292,134 +268,106 @@ public class SearchService {
             queryLength += v * v;
         }
         queryLength = Math.sqrt(queryLength);
-        
+
         // Normalize scores
-        for (Object[] innerProduct : innerProducts.values()) {
-            innerProduct[0] = (Double) innerProduct[0] / queryLength;
+        for (SimilarityRetrieval similarityRetrieval: similarityRetrievals.values()) {
+            double score = similarityRetrieval.getSimilarityScore();
+            if (queryLength > 0) {
+                score /= queryLength;
+            }
+            similarityRetrieval.setSimilarityScore(score);
         }
         
-        return innerProducts;
+        return similarityRetrievals;
     }
     
     private double getTermWeight(double tfNorm, double idf) {
         return tfNorm * idf;
     }
     
+    private void populateUrlInfo(SearchResult result, Long urlId) throws JsonProcessingException {
+        if (result.getUrl() != null) {
+            return; // URL info already populated
+        }
+        UrlList urlList = urlListRepository.findById(urlId).orElse(null);
+        if (urlList == null) {
+            return; // URL not found
+        }
+
+        result.setUrl(urlList.getUrl());
+        result.setTitle(urlList.getTitle());
+        result.setLastModified(urlList.getLastModified());
+        result.setSize(urlList.getContentLength());
+        
+        // Get parent and child links
+        List<Long> parentIds = parentChildRepository.findParentIdsByChildId(urlId);
+        List<Long> childIds = parentChildRepository.findChildIdsByParentId(urlId);
+        
+        result.setParentLinks(parentIds.stream()
+                .map(urlListRepository::findUrlByUid)
+                .collect(Collectors.toList()));
+        
+        result.setChildLinks(childIds.stream()
+                .map(urlListRepository::findUrlByUid)
+                .collect(Collectors.toList()));
+        
+        // Get keywords
+        String forwardIndexHead = forwardIndexRepository.getForwardIndexHead(urlId).get(0);
+        Map<String, Integer> keywords = indexParser.parseForwardIndexHeader((String) forwardIndexHead);
+        result.setKeywords(keywords);
+    }
+    
     private List<SearchResult> _search(List<String> query, List<String> phrase, boolean rawMatchPhrase, 
                                       boolean stemForRaw, boolean matchInTitle, int phraseSearchDistance, 
-                                      boolean withPageRank) {
-        Map<Integer, SearchResult> results = new HashMap<>();
+                                      boolean withPageRank) throws JsonProcessingException {
+        Map<Long, SearchResult> results = new HashMap<>();
         
-        Set<Integer> filteredUrl = null;
+        Set<Long> filteredUrl = null;
         if (phrase != null && !phrase.isEmpty()) {
-            filteredUrl = filtering(phrase, matchInTitle, rawMatchPhrase, stemForRaw, phraseSearchDistance);
+            filteredUrl = filterPhrase(phrase, matchInTitle, rawMatchPhrase, stemForRaw, phraseSearchDistance);
         }
         
-        Map<Integer, Object[]> bodyInnerProducts = _cosineSimilarity(query, "invertedIndex", filteredUrl);
-        Map<Integer, Object[]> titleInnerProducts = _cosineSimilarity(query, "titleInvertedIndex", filteredUrl);
-        
+        Map<Long, SimilarityRetrieval> bodyInnerProducts = _cosineSimilarity(query, "invertedIndex", filteredUrl);
+        Map<Long, SimilarityRetrieval> titleInnerProducts = _cosineSimilarity(query, "titleInvertedIndex", filteredUrl);
+
         // Process body results
-        for (Map.Entry<Integer, Object[]> entry : bodyInnerProducts.entrySet()) {
-            Integer urlId = entry.getKey();
-            Object[] innerProduct = entry.getValue();
-            Double score = (Double) innerProduct[0] * bodyWeight;
-            
-            @SuppressWarnings("unchecked")
-            Map<String, Set<Integer>> wordPositions = (Map<String, Set<Integer>>) innerProduct[1];
+        for (Map.Entry<Long, SimilarityRetrieval> entry : bodyInnerProducts.entrySet()) {
+            Long urlId = entry.getKey();
+            SimilarityRetrieval similarityRetrieval = entry.getValue();
+            double score = similarityRetrieval.getSimilarityScore() * bodyWeight;
             
             SearchResult result = results.computeIfAbsent(urlId, k -> new SearchResult());
             result.setScore(result.getScore() + score);
             result.setWordPos(new HashMap<>());
-            for (Map.Entry<String, Set<Integer>> wordPos : wordPositions.entrySet()) {
+            for (Map.Entry<String, Set<Integer>> wordPos : similarityRetrieval.getWordPositions().entrySet()) {
                 result.getWordPos().put(wordPos.getKey(), new ArrayList<>(wordPos.getValue()));
             }
             
             // Get URL info
-            String url = urlListRepository.findUrlByUid(urlId);
-            Object[] urlInfo = urlListRepository.getUrlInfo(urlId);
-            
-            result.setUrl(url);
-            if (urlInfo != null && urlInfo.length >= 3) {
-                result.setTitle((String) urlInfo[0]);
-                result.setLastModified((String) urlInfo[1]);
-                result.setSize((Integer) urlInfo[2]);
-            }
-            
-            // Get parent and child links
-            List<Integer> parentIds = parentChildRepository.findParentIdsByChildId(urlId);
-            List<Integer> childIds = parentChildRepository.findChildIdsByParentId(urlId);
-            
-            result.setParentLinks(parentIds.stream()
-                    .map(urlListRepository::findUrlByUid)
-                    .collect(Collectors.toList()));
-            
-            result.setChildLinks(childIds.stream()
-                    .map(urlListRepository::findUrlByUid)
-                    .collect(Collectors.toList()));
-            
-            // Get keywords
-            Object[] forwardIndexHead = forwardIndexRepository.getForwardIndexHead(urlId);
-            if (forwardIndexHead != null && forwardIndexHead.length >= 2) {
-                @SuppressWarnings("unchecked")
-                Map<String, Integer> keywords = (Map<String, Integer>) forwardIndexHead[1];
-                result.setKeywords(keywords);
-            }
+            populateUrlInfo(result, urlId);
         }
         
         // Process title results
-        for (Map.Entry<Integer, Object[]> entry : titleInnerProducts.entrySet()) {
-            Integer urlId = entry.getKey();
-            Object[] innerProduct = entry.getValue();
-            Double score = (Double) innerProduct[0] * titleWeight;
-            
-            @SuppressWarnings("unchecked")
-            Map<String, Set<Integer>> wordPositions = (Map<String, Set<Integer>>) innerProduct[1];
-            
+        for (Map.Entry<Long, SimilarityRetrieval> entry : titleInnerProducts.entrySet()) {
+            Long urlId = entry.getKey();
+            SimilarityRetrieval similarityRetrieval = entry.getValue();
+            double score = similarityRetrieval.getSimilarityScore() * bodyWeight;
+
             SearchResult result = results.computeIfAbsent(urlId, k -> new SearchResult());
             result.setScore(result.getScore() + score);
             result.setTitleWordPos(new HashMap<>());
-            for (Map.Entry<String, Set<Integer>> wordPos : wordPositions.entrySet()) {
+            for (Map.Entry<String, Set<Integer>> wordPos : similarityRetrieval.getWordPositions().entrySet()) {
                 result.getTitleWordPos().put(wordPos.getKey(), new ArrayList<>(wordPos.getValue()));
             }
-            
+
             // Get URL info if not already set
-            if (result.getUrl() == null) {
-                String url = urlListRepository.findUrlByUid(urlId);
-                Object[] urlInfo = urlListRepository.getUrlInfo(urlId);
-                
-                result.setUrl(url);
-                if (urlInfo != null && urlInfo.length >= 3) {
-                    result.setTitle((String) urlInfo[0]);
-                    result.setLastModified((String) urlInfo[1]);
-                    result.setSize((Integer) urlInfo[2]);
-                }
-                
-                // Get parent and child links
-                List<Integer> parentIds = parentChildRepository.findParentIdsByChildId(urlId);
-                List<Integer> childIds = parentChildRepository.findChildIdsByParentId(urlId);
-                
-                result.setParentLinks(parentIds.stream()
-                        .map(urlListRepository::findUrlByUid)
-                        .collect(Collectors.toList()));
-                
-                result.setChildLinks(childIds.stream()
-                        .map(urlListRepository::findUrlByUid)
-                        .collect(Collectors.toList()));
-                
-                // Get keywords
-                Object[] forwardIndexHead = forwardIndexRepository.getForwardIndexHead(urlId);
-                if (forwardIndexHead != null && forwardIndexHead.length >= 2) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Integer> keywords = (Map<String, Integer>) forwardIndexHead[1];
-                    result.setKeywords(keywords);
-                }
-            }
+            populateUrlInfo(result, urlId);
         }
         
         // Add page rank score
         if (withPageRank) {
             for (SearchResult result : results.values()) {
-                Integer urlId = urlListRepository.findUidByUrl(result.getUrl());
+                Long urlId = urlListRepository.findUidByUrl(result.getUrl());
                 if (urlId != null) {
                     Double pageRankScore = urlListRepository.getPageRankScore(urlId);
                     if (pageRankScore != null) {
@@ -436,10 +384,10 @@ public class SearchService {
         // Add body snippets for top 5 results
         for (int i = 0; i < Math.min(5, sortedResults.size()); i++) {
             SearchResult result = sortedResults.get(i);
-            Integer urlId = urlListRepository.findUidByUrl(result.getUrl());
+            Long urlId = urlListRepository.findUidByUrl(result.getUrl());
             if (urlId != null) {
-                String body = urlBodyRepository.getUrlBody(urlId);
-                if (body != null && !result.getWordPos().isEmpty()) {
+                String body = urlBodyRepository.getUrlBody(urlId).get(0);
+                if (result.getWordPos() != null && !result.getWordPos().isEmpty()) {
                     // Find the earliest position of any query word
                     int minIndex = Integer.MAX_VALUE;
                     for (String queryWord : result.getWordPos().keySet()) {
@@ -461,5 +409,9 @@ public class SearchService {
         }
         
         return sortedResults;
+    }
+
+    public long getWordListCount() {
+        return wordListRepository.count();
     }
 }

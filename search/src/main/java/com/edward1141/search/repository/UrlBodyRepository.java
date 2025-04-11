@@ -6,9 +6,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
-public interface UrlBodyRepository extends JpaRepository<UrlBody, Integer> {
+public interface UrlBodyRepository extends JpaRepository<UrlBody, Long> {
     
-    @Query("SELECT ub.body FROM UrlBody ub WHERE ub.uid = :uid")
-    String getUrlBody(@Param("uid") Integer uid);
+    @Query(value = "SELECT ub.body FROM UrlBody ub WHERE ub.uid = :uid LIMIT 1", nativeQuery = true)
+    List<String> getUrlBody(@Param("uid") Long uid);
 } 

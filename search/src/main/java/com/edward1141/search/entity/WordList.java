@@ -10,6 +10,6 @@ import lombok.Data;
 @Data
 public class WordList {
     @Id
-    private Integer wid;
+    private Long wid;
     private String word;
 } 

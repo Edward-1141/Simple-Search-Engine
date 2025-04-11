@@ -6,9 +6,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
-public interface RawInvertedIndexRepository extends JpaRepository<RawInvertedIndex, Integer> {
+public interface RawInvertedIndexRepository extends JpaRepository<RawInvertedIndex, Long> {
     
-    @Query("SELECT rii.count, rii.data FROM RawInvertedIndex rii WHERE rii.wid = :wid")
-    Object[] getInvertedIndexPosition(@Param("wid") Integer wid);
+    @Query(value = "SELECT rii.data FROM RawInvertedIndex rii WHERE rii.wid = :wid LIMIT 1", nativeQuery = true)
+    List<String> getInvertedIndexPosition(@Param("wid") Long wid);
 } 

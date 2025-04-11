@@ -10,26 +10,23 @@ import java.util.List;
 import java.util.Map;
 
 @Repository
-public interface UrlListRepository extends JpaRepository<UrlList, Integer> {
+public interface UrlListRepository extends JpaRepository<UrlList, Long> {
     
-    @Query("SELECT u.uid FROM UrlList u WHERE u.url = :url")
-    Integer findUidByUrl(@Param("url") String url);
+    @Query(value = "SELECT u.uid FROM UrlList u WHERE u.url = :url LIMIT 1", nativeQuery = true)
+    Long findUidByUrl(@Param("url") String url);
     
-    @Query("SELECT u.url FROM UrlList u WHERE u.uid = :uid")
-    String findUrlByUid(@Param("uid") Integer uid);
+    @Query(value = "SELECT u.url FROM UrlList u WHERE u.uid = :uid LIMIT 1", nativeQuery = true)
+    String findUrlByUid(@Param("uid") Long uid);
     
-    @Query("SELECT u.uid as uid, u.url as url FROM UrlList u")
-    List<Map<String, Object>> getUrlIdDict();
+    @Query(value = "SELECT u.title, u.last_modified, u.content_length FROM UrlList u WHERE u.uid = :uid LIMIT 1", nativeQuery = true)
+    Object[] getUrlInfo(@Param("uid") Long uid);
     
-    @Query("SELECT u.title, u.lastModified, u.contentLength FROM UrlList u WHERE u.uid = :uid")
-    Object[] getUrlInfo(@Param("uid") Integer uid);
+    @Query(value = "SELECT u.document_weight FROM UrlList u WHERE u.uid = :uid LIMIT 1", nativeQuery = true)
+    Double getDocumentWeight(@Param("uid") Long uid);
     
-    @Query("SELECT u.documentWeight FROM UrlList u WHERE u.uid = :uid")
-    Double getDocumentWeight(@Param("uid") Integer uid);
+    @Query(value = "SELECT u.title_weight FROM UrlList u WHERE u.uid = :uid LIMIT 1", nativeQuery = true)
+    Double getTitleWeight(@Param("uid") Long uid);
     
-    @Query("SELECT u.titleWeight FROM UrlList u WHERE u.uid = :uid")
-    Double getTitleWeight(@Param("uid") Integer uid);
-    
-    @Query("SELECT u.pageRankScore FROM UrlList u WHERE u.uid = :uid")
-    Double getPageRankScore(@Param("uid") Integer uid);
+    @Query(value = "SELECT u.page_rank_score FROM UrlList u WHERE u.uid = :uid LIMIT 1", nativeQuery = true)
+    Double getPageRankScore(@Param("uid") Long uid);
 } 
