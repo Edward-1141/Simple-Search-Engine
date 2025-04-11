@@ -40,8 +40,7 @@ class SearchResults:
             url_id)
         self.result["parent_links"] = database.get_parent(url_id)
         self.result["child_links"] = database.get_child(url_id)
-        _, self.result["keywords"] = database.get_forward_index_head(
-            url_id)
+        _, self.result["keywords"] = database.get_forward_index_head(url_id)
         self.up_dated = True
 
 

@@ -1,5 +1,6 @@
 from functools import lru_cache
 from typing import Literal, Sequence
+import json
 
 import sqlite3
 import numpy as np
@@ -10,6 +11,7 @@ from .Page import Page
 from .Index import InvertedIndex, ForwardIndex, IDMap, PageForwardIndex, generate_hash_id
 
 CACHE_SIZE = 1024
+
 
 class Database:
     def __init__(self, db_path, forward_index_head_size=10):
@@ -193,7 +195,9 @@ class Database:
         if not result:
             return None, None
         count = result[0]
-        return count, eval(result[1])
+        data = {int(key): value for key,
+                value in json.loads(result[1]).items()}
+        return count, data
 
     @lru_cache(maxsize=CACHE_SIZE)
     def get_inverted_index_position(self, word: int | str,
@@ -219,11 +223,11 @@ class Database:
             return None, None
         count = result[0]
         if table == "invertedIndex" or table == "titleInvertedIndex":
-            positions = {page_id: query[-1]
-                         for page_id, query in eval(result[1]).items()}
+            positions = {int(page_id): query[-1]
+                         for page_id, query in json.loads(result[1]).items()}
         else:  # rawInvertedIndex or rawTitleInvertedIndex
-            positions = eval(result[1])
-        # print(positions)
+            positions = {int(page_id): query[-1]
+                         for page_id, query in json.loads(result[1]).items()}
         return count, positions
 
     @lru_cache(maxsize=CACHE_SIZE)
@@ -233,7 +237,7 @@ class Database:
         params:
             url: str | int - the url or url id
         return:
-            dict[int, tuple[float, float, float, float, Sequence[int]]] - dictionary of word ids to (tf, df, tf_norm, idf, positions)
+            dict[str, int] - dictionary of word ids to tf
         """
         if isinstance(url, str):
             uid = self.get_uid(url)
@@ -245,7 +249,7 @@ class Database:
         if not result:
             return None, None
         count = result[0]
-        return count, eval(result[1])
+        return count, json.loads(result[1])
 
     @lru_cache(maxsize=CACHE_SIZE)
     def get_urlbody(self, uid: int):
@@ -350,6 +354,8 @@ class Database:
             self.cursor.execute(query, (score_array[idx][0], uid))
         self.connection.commit()
 
+    # TODO: for data, make it a valid json string for java
+
     def add_data_urlList(self, page: Page, uid: int):
         url = page.url
         last_modified = page.last_modified.strftime("%m/%d/%Y, %H:%M:%S")
@@ -392,7 +398,7 @@ class Database:
                                body_posting_query.vsm_info.df,
                                body_posting_query.vsm_info.tf_norm,
                                body_posting_query.vsm_info.idf,
-                               body_posting_query.positions) for word_id, body_posting_query in forward_index.body_posting.items()}
+                               list(body_posting_query.positions)) for word_id, body_posting_query in forward_index.body_posting.items()}
 
         # get the most frequent first forward_index_head_size words
         # data_head = {self.get_word(word_id): body_posting_query.vsm_info.tf
@@ -400,8 +406,8 @@ class Database:
         data_head = {self.get_word_uncached(word_id): body_posting_query.vsm_info.tf
                      for i, (word_id, body_posting_query) in enumerate(sorted(forward_index.body_posting.items(), key=lambda x: x[1].vsm_info.tf, reverse=True)) if i < self.forward_index_head_size}
 
-        data_head = str(data_head)
-        data = str(full_data)
+        data_head = json.dumps(data_head)
+        data = json.dumps(full_data)
 
         query = "SELECT COUNT(*) FROM forwardIndex WHERE uid = ?"
         self.cursor.execute(query, (uid,))
@@ -423,23 +429,23 @@ class Database:
         wid = inverted_index_query.id
         count = len(inverted_index_query.page_ids)
         if table == "invertedIndex":
-            data = str({page_id: forward_indices[page_id].body_posting[wid].to_db_format(
+            data = json.dumps({page_id: forward_indices[page_id].body_posting[wid].to_db_format(
             ) for page_id in inverted_index_query.page_ids})
         elif table == "titleInvertedIndex":
-            data = str({page_id: forward_indices[page_id].title[wid].to_db_format(
+            data = json.dumps({page_id: forward_indices[page_id].title[wid].to_db_format(
             ) for page_id in inverted_index_query.page_ids})
         elif table == "rawInvertedIndex":
-            data = str({page_id: forward_indices[page_id].raw_body_posting[wid]
-                       for page_id in inverted_index_query.page_ids})
+            data = json.dumps({page_id: list(forward_indices[page_id].raw_body_posting[wid])
+                               for page_id in inverted_index_query.page_ids})
         elif table == "rawTitleInvertedIndex":
-            data = str({page_id: forward_indices[page_id].raw_title_posting[wid]
-                       for page_id in inverted_index_query.page_ids})
+            data = json.dumps({page_id: list(forward_indices[page_id].raw_title_posting[wid])
+                               for page_id in inverted_index_query.page_ids})
         elif table == "stemmedRawInvertedIndex":
-            data = str({page_id: forward_indices[page_id].stemmed_raw_body_posting[wid]
-                       for page_id in inverted_index_query.page_ids})
+            data = json.dumps({page_id: list(forward_indices[page_id].stemmed_raw_body_posting[wid])
+                               for page_id in inverted_index_query.page_ids})
         elif table == "stemmedRawTitleInvertedIndex":
-            data = str({page_id: forward_indices[page_id].stemmed_raw_title_posting[wid]
-                       for page_id in inverted_index_query.page_ids})
+            data = json.dumps({page_id: list(forward_indices[page_id].stemmed_raw_title_posting[wid])
+                               for page_id in inverted_index_query.page_ids})
 
         query = f"SELECT COUNT(*) FROM {table} WHERE wid = ?"
         self.cursor.execute(query, (wid,))
@@ -554,7 +560,7 @@ class Database:
         self.cursor.execute("SELECT wid, count, data FROM titleInvertedIndex")
         for row in self.cursor.fetchall():
             wid = row[0]
-            data = eval(row[2])
+            data = {int(page_id): value for page_id, value in json.loads(row[2]).items()}
             for page_id, (tf, df, tf_norm, idf, positions) in data.items():
                 title_inverted_index[wid].update_info(
                     page_id, page_id_dict.get_value(page_id), wid, word_id_dict.get_value(wid))
@@ -564,7 +570,7 @@ class Database:
         self.cursor.execute("SELECT wid, count, data FROM invertedIndex")
         for row in self.cursor.fetchall():
             wid = row[0]
-            data = eval(row[2])
+            data = {int(page_id): value for page_id, value in json.loads(row[2]).items()}
             for page_id, (tf, df, tf_norm, idf, positions) in data.items():
                 inverted_index[wid].update_info(page_id, page_id_dict.get_value(
                     page_id), wid, word_id_dict.get_value(wid))
@@ -574,7 +580,7 @@ class Database:
         self.cursor.execute("SELECT wid, count, data FROM rawInvertedIndex")
         for row in self.cursor.fetchall():
             wid = row[0]
-            data = eval(row[2])
+            data = {int(page_id): value for page_id, value in json.loads(row[2]).items()}
             for page_id, positions in data.items():
                 raw_inverted_index[wid].update_info(page_id, page_id_dict.get_value(
                     page_id), wid, word_id_dict.get_value(wid))
@@ -584,7 +590,7 @@ class Database:
             "SELECT wid, count, data FROM rawTitleInvertedIndex")
         for row in self.cursor.fetchall():
             wid = row[0]
-            data = eval(row[2])
+            data = {int(page_id): value for page_id, value in json.loads(row[2]).items()}
             for page_id, positions in data.items():
                 raw_title_inverted_index[wid].update_info(
                     page_id, page_id_dict.get_value(page_id), wid, word_id_dict.get_value(wid))
@@ -594,7 +600,7 @@ class Database:
             "SELECT wid, count, data FROM stemmedRawInvertedIndex")
         for row in self.cursor.fetchall():
             wid = row[0]
-            data = eval(row[2])
+            data = {int(page_id): value for page_id, value in json.loads(row[2]).items()}
             for page_id, positions in data.items():
                 stemmed_raw_inverted_index[wid].update_info(
                     page_id, page_id_dict.get_value(page_id), wid, word_id_dict.get_value(wid))
@@ -604,7 +610,7 @@ class Database:
             "SELECT wid, count, data FROM stemmedRawTitleInvertedIndex")
         for row in self.cursor.fetchall():
             wid = row[0]
-            data = eval(row[2])
+            data = {int(page_id): value for page_id, value in json.loads(row[2]).items()}
             for page_id, positions in data.items():
                 stemmed_raw_title_inverted_index[wid].update_info(
                     page_id, page_id_dict.get_value(page_id), wid, word_id_dict.get_value(wid))
@@ -621,9 +627,8 @@ class Database:
         self.cursor.execute(query, (wid,))
         row = self.cursor.fetchone()
         count = row[0]
-        data = eval(row[1])
-        data = {key: value for key, value in data.items() if key != uid}
+        data = {int(page_id): value for page_id, value in json.loads(row[1]).items() if page_id != uid}
         count -= 1
         query = f"UPDATE {table} SET count = ?, data = ? WHERE wid = ?"
-        self.cursor.execute(query, (count, str(data), wid))
+        self.cursor.execute(query, (count, json.dumps(data), wid))
         self.connection.commit()

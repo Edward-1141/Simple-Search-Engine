@@ -103,7 +103,7 @@ class PageForwardIndex:
             self.positions = positions
 
         def to_db_format(self):
-            return self.vsm_info.tf, self.vsm_info.df, self.vsm_info.tf_norm, self.vsm_info.idf, self.positions
+            return self.vsm_info.tf, self.vsm_info.df, self.vsm_info.tf_norm, self.vsm_info.idf, list(self.positions)
 
     def __init__(self, url: str, id: int):
         self.body_posting: defaultdict[int, PageForwardIndex.ForwardIndexQuery] = defaultdict(
