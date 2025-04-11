@@ -1,16 +1,27 @@
 from database.Database import Database
 from spider.Indexer import Indexer
 from spider.Spider import Spider
+import argparse
+
+# TODO: Validate arguments
 
 if __name__ == '__main__':
-    db_name = 'db/spider_test4.db'
-    database = Database(db_name)
-    indexer = Indexer('stopwords/stopwords.txt', database)
+    parser = argparse.ArgumentParser(description='Web crawler')
+    parser.add_argument('--db', type=str, default='db/spider_test.db',
+                        help='Path to the database file')
+    parser.add_argument('--pages', type=int, default=15,
+                        help='Number of pages to crawl (default: 15)')
+    parser.add_argument('--url', type=str, help='Starting URL to crawl')
+    parser.add_argument('--stopwords', type=str, default='stopwords/stopwords.txt',
+                        help='Path to stopwords file (default: stopwords/stopwords.txt)')
+
+    args = parser.parse_args()
+
+    # Initialize components with command-line arguments
+    database = Database(args.db)
+    indexer = Indexer(args.stopwords, database)
     spider = Spider(database, indexer)
 
     # Crawl the starting_url and its children
-    NUMBER_OF_PAGES = 15
-    starting_url = 'https://www.cse.ust.hk/~kwtleung/COMP4321/testpage.htm'
-
-    spider.crawl(starting_url, NUMBER_OF_PAGES)
-    print(f'Finished, results stored in {db_name}.')
+    spider.crawl(args.url, args.pages)
+    print(f'Finished, results stored in {args.db}.')
