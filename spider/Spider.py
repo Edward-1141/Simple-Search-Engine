@@ -8,11 +8,6 @@ from database.Page import Page
 from database.Database import Database
 from database.Index import generate_hash_id
 
-
-# TODO: 1. still crawling the same page if last-modified is newer base on db
-#       2. update db after having the new forward_index, inverted_index, title_inverted_index
-
-
 class Spider:
     def __init__(self, database: Database, indexer: Indexer):
         # Initializations

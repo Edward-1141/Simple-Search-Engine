@@ -12,6 +12,10 @@ from .Index import InvertedIndex, ForwardIndex, IDMap, PageForwardIndex, generat
 
 CACHE_SIZE = 1024
 
+# TODO: (when I have time :D)
+# * Refactor the database schema to be more efficient
+#   - combine some of the tables
+#   - enhance the storage format of the inverted index
 
 class Database:
     def __init__(self, db_path, forward_index_head_size=10):
@@ -353,8 +357,6 @@ class Database:
             query = "UPDATE urlList SET page_rank_score = ? WHERE uid = ?"
             self.cursor.execute(query, (score_array[idx][0], uid))
         self.connection.commit()
-
-    # TODO: for data, make it a valid json string for java
 
     def add_data_urlList(self, page: Page, uid: int):
         url = page.url

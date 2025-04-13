@@ -67,7 +67,6 @@ public class IndexParser {
 
         Map<Long, Set<Integer>> result = new HashMap<>();
 
-        // TODO: More error checking
         rawMap.forEach((key, array) -> {
             Set<Integer> positions = new HashSet<Integer>();
             int idx = array.length - 1;

@@ -20,11 +20,11 @@ import org.slf4j.LoggerFactory;
 import java.util.*;
 import java.util.stream.Collectors;
 
-
-// TODO: use Enum for String
+// (If I have time :D)
+// TODO: helper class for the repositorys, or combine the table, or whatever method to make the code more readable
+// TODO: create Enum classes instead of String when inputting parameters
 // TODO: refactor refactor to don't remove count for inverted index
 // TODO: fixed the Object[] and create classes for them
-// TODO: Remove useless wordPos and titleWordPos
 
 @Service
 public class SearchService {
@@ -140,7 +140,6 @@ public class SearchService {
         return false;
     }
 
-    //TODO: Repository type
     private Set<Long> filterPhraseInTable(List<String> phrase, boolean raw, String table, int phraseSearchDistance, boolean stemForRaw) throws JsonProcessingException {
         Map<Long, List<Set<Integer>>> uidPositionList = new HashMap<>();
         
@@ -214,7 +213,6 @@ public class SearchService {
         }
     }
 
-    //TODO: Repository type
     private Map<Long, SimilarityRetrieval> _cosineSimilarity(List<String> query, String invertedIndexTable, Set<Long> filteredUrl) throws JsonProcessingException {
         Map<Long, SimilarityRetrieval> similarityRetrievals = new HashMap<>(); // urlId -> (score, wordPositions)
         double[] queryVector = new double[query.size()];
